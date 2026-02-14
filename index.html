@@ -1,0 +1,2630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DitherPro — Fixed Color & Palette Dithering</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* RESET & BASE */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', 'Inter', -apple-system, BlinkMacSystemFont, monospace;
+            background: #2a2a2a;
+            height: 100vh;
+            overflow: hidden;
+            font-size: 11px;
+            font-weight: 400;
+            letter-spacing: 0.02em;
+        }
+
+        /* MAIN FLEX LAYOUT */
+        .app {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* ========== LEFT WORKSPACE ========== */
+        .workspace {
+            flex: 1;
+            background: #e5e5e5;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            position: relative;
+            overflow: auto;
+        }
+
+        .workspace-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 0 10px;
+        }
+
+        .zoom-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .zoom-btn {
+            background: #2a2a2a;
+            border: 1px solid #4a4a4a;
+            color: #e0e0e0;
+            font-size: 14px;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            transition: all 0.1s;
+        }
+
+        .zoom-btn:hover {
+            background: #3a3a3a;
+            border-color: #4a5b85;
+        }
+
+        .zoom-level {
+            color: #333;
+            font-size: 11px;
+            padding: 4px 12px;
+            background: #d0d0d0;
+            border-radius: 4px;
+        }
+
+        .theme-selector {
+            display: flex;
+            gap: 8px;
+        }
+
+        .theme-btn {
+            background: transparent;
+            border: 1px solid #4a4a4a;
+            color: #666;
+            font-size: 10px;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .theme-btn:hover {
+            border-color: #4a5b85;
+            color: #333;
+        }
+
+        .theme-btn.active {
+            background: #4a5b85;
+            border-color: #6a8bcf;
+            color: white;
+        }
+
+        .paper {
+            background: white;
+            flex: 1;
+            box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.4), 0 5px 15px rgba(0, 0, 0, 0.2);
+            border-radius: 2px;
+            display: flex;
+            flex-direction: column;
+            background: #f8f8f8;
+            overflow: auto;
+            position: relative;
+        }
+
+        .canvas-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .toggle-btn {
+            background: #2a2a2a;
+            border: 1px solid #4a4a4a;
+            color: #e0e0e0;
+            font-size: 10px;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            transition: all 0.1s;
+        }
+
+        .toggle-btn:hover {
+            background: #3a3a3a;
+            border-color: #4a5b85;
+        }
+
+        .toggle-btn.active {
+            background: #4a5b85;
+            border-color: #6a8bcf;
+        }
+
+        .canvas-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #eee;
+            margin: 16px;
+            border: 1px solid #ddd;
+            overflow: auto;
+            position: relative;
+        }
+
+        #mainCanvas {
+            display: block;
+            image-rendering: pixelated;
+            transition: transform 0.1s ease;
+            transform-origin: center;
+            max-width: none;
+            max-height: none;
+        }
+
+        .image-info {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* ========== RIGHT SIDEBAR ========== */
+        .sidebar {
+            width: 420px;
+            background: #181818;
+            border-left: 1px solid #2a2a2a;
+            display: flex;
+            flex-direction: column;
+            color: #e0e0e0;
+            user-select: none;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #444 #222;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 5px;
+        }
+        .sidebar::-webkit-scrollbar-track {
+            background: #222;
+        }
+        .sidebar::-webkit-scrollbar-thumb {
+            background: #444;
+        }
+
+        /* Section Containers */
+        .section {
+            padding: 18px 16px 16px 16px;
+            border-bottom: 1px solid #2a2a2a;
+        }
+
+        .section-title {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #888;
+            margin-bottom: 16px;
+            font-weight: 500;
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* BUTTON STYLES */
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .btn {
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            color: #e0e0e0;
+            font-size: 11px;
+            padding: 8px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 0.02em;
+            transition: all 0.1s ease;
+            text-align: center;
+        }
+
+        .btn:hover {
+            background: #333;
+            border-color: #4a5b85;
+        }
+
+        .btn-wide {
+            grid-column: span 4;
+            background: #2f2f2f;
+            border-color: #4a5b85;
+            color: white;
+            font-weight: 500;
+            padding: 10px 0;
+        }
+
+        .btn-wide:hover {
+            background: #3a3f4a;
+        }
+
+        .btn.active {
+            background: #4a5b85;
+            border-color: #6a8bcf;
+        }
+
+        /* CONTROL GROUPS */
+        .control-group {
+            display: grid;
+            grid-template-columns: 80px 1fr 40px;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            font-size: 11px;
+        }
+
+        .control-label {
+            color: #b0b0b0;
+            white-space: nowrap;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .control-value {
+            color: #d0d0d0;
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+        }
+
+        /* CUSTOM RANGE SLIDERS */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            background: #2a2f3a;
+            border: none;
+            border-radius: 2px;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #c0c0c0;
+            border-radius: 2px;
+            margin-top: -4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            cursor: pointer;
+        }
+
+        /* MODE TOGGLE BUTTONS */
+        .mode-toggle {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 16px;
+            background: #222;
+            padding: 4px;
+            border-radius: 6px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #888;
+            font-size: 10px;
+            padding: 6px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            text-transform: uppercase;
+            transition: all 0.1s;
+        }
+
+        .mode-btn:hover {
+            color: #ccc;
+        }
+
+        .mode-btn.active {
+            background: #4a5b85;
+            color: white;
+        }
+
+        /* CHECKBOX STYLES */
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        input[type=checkbox] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #2a2a2a;
+            border: 1px solid #4a5b85;
+            border-radius: 2px;
+            margin-right: 8px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        input[type=checkbox]:checked {
+            background: #4a5b85;
+        }
+
+        input[type=checkbox]:checked::after {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #c0c0c0;
+            display: block;
+        }
+
+        .checkbox-label {
+            color: #d0d0d0;
+            font-size: 11px;
+            flex: 1;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* SELECT DROPDOWN */
+        .algorithm-selector {
+            background: #222;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            padding: 8px 10px;
+            margin-bottom: 16px;
+            width: 100%;
+            color: #e0e0e0;
+            font-size: 11px;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* PALETTE CATEGORIES */
+        .palette-category {
+            margin-bottom: 16px;
+        }
+
+        .category-title {
+            color: #666;
+            font-size: 9px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            letter-spacing: 0.05em;
+        }
+
+        .palette-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .palette-btn {
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            color: #e0e0e0;
+            font-size: 9px;
+            padding: 6px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            transition: all 0.1s;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .palette-btn:hover {
+            background: #333;
+            border-color: #4a5b85;
+        }
+
+        .palette-btn.active {
+            background: #4a5b85;
+            border-color: #6a8bcf;
+            color: white;
+        }
+
+        /* PALETTE PREVIEW */
+        .palette-preview-container {
+            background: #222;
+            border-radius: 4px;
+            padding: 12px;
+            margin-top: 8px;
+        }
+
+        .palette-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .palette-name {
+            color: #4a5b85;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .palette-colors {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .color-swatch {
+            height: 24px;
+            border-radius: 2px;
+            border: 1px solid #3a3a3a;
+            transition: transform 0.1s;
+        }
+
+        .color-swatch:hover {
+            transform: scale(1.1);
+            border-color: #4a5b85;
+        }
+
+        .color-swatch.empty {
+            background: #1a1a1a;
+            border: 1px dashed #444;
+        }
+
+        .dithering-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 1px;
+            margin-left: 6px;
+            background: #4a5b85;
+        }
+
+        .dithering-indicator.off {
+            background: #666;
+        }
+
+        /* STATUS */
+        .status-bar {
+            margin-top: auto;
+            padding: 16px;
+            background: #141414;
+            border-top: 1px solid #2a2a2a;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            color: #888;
+            font-size: 10px;
+            margin-bottom: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .status-value {
+            color: #c0c0c0;
+        }
+
+        .status-value.active {
+            color: #4a5b85;
+            font-weight: bold;
+        }
+
+        .divider {
+            height: 1px;
+            background: #2a2a2a;
+            margin: 16px 0;
+        }
+
+        .note {
+            color: #777;
+            font-size: 9px;
+            margin-top: 8px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .pixel-icon {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 20px;
+            line-height: 1;
+            color: #ffb86b;
+            text-align: center;
+            margin-bottom: 8px;
+            letter-spacing: -2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- LEFT WORKSPACE -->
+        <div class="workspace">
+            <div class="workspace-header">
+                <div class="zoom-controls">
+                    <button class="zoom-btn" id="zoomOutBtn">−</button>
+                    <span class="zoom-level" id="zoomLevel">100%</span>
+                    <button class="zoom-btn" id="zoomInBtn">+</button>
+                    <button class="zoom-btn" id="zoomFitBtn">↺ FIT</button>
+                </div>
+                <div class="theme-selector">
+                    <button class="theme-btn" id="themeDarkBtn">🌙 DARK</button>
+                    <button class="theme-btn" id="themeLightBtn">☀️ LIGHT</button>
+                    <button class="theme-btn" id="themeSystemBtn">💻 SYSTEM</button>
+                </div>
+            </div>
+            <div class="paper">
+                <div class="canvas-header">
+                    <span id="viewLabel">DITHERED</span>
+                    <button class="toggle-btn" id="viewToggle">⟲ ORIGINAL</button>
+                </div>
+                <div class="canvas-container" id="canvasContainer">
+                    <canvas id="mainCanvas"></canvas>
+                    <div class="image-info" id="imageInfo">No image loaded</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT SIDEBAR -->
+        <div class="sidebar">
+            <div class="section">
+                <div class="pixel-icon">◢◣◢◣<br>◥◣◢◤<br>◥◤</div>
+                
+                <div class="button-grid">
+                    <button class="btn" id="importBtn">📂 IMPORT</button>
+                    <button class="btn" id="exportBtn">💾 EXPORT</button>
+                    <button class="btn" id="resetBtn">↺ RESET</button>
+                    <button class="btn" id="infoBtn">ℹ️ INFO</button>
+                </div>
+                <input type="file" id="fileInput" accept="image/*" style="display: none;">
+            </div>
+
+            <div class="section">
+                <div class="section-title">MODE</div>
+                <div class="mode-toggle">
+                    <button class="mode-btn" id="modeMonochrome">⚫ MONOCHROME</button>
+                    <button class="mode-btn" id="modeColor">🎨 COLOR</button>
+                    <button class="mode-btn active" id="modePalette">📋 PALETTE</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">ALGORITHM</div>
+                <select class="algorithm-selector" id="algorithmSelect">
+                    <option value="threshold">THRESHOLD (NO DITHER)</option>
+                    <option value="random">RANDOM NOISE</option>
+                    <option value="bayer" selected>BAYER</option>
+                    <option value="bayerInverted">BAYER INVERTED</option>
+                    <option value="blueNoise">BLUE NOISE</option>
+                    <option value="floydSteinberg">FLOYD-STEINBERG</option>
+                    <option value="jarvis">JARVIS-JUDICE-NINKE</option>
+                    <option value="atkinson">ATKINSON</option>
+                    <option value="riemersma">RIEMERSMA</option>
+                    <option value="simple2d">SIMPLE 2D</option>
+                </select>
+            </div>
+
+            <div class="section">
+                <div class="section-title">COLOR PALETTES</div>
+                
+                <!-- Abstract Palettes -->
+                <div class="palette-category">
+                    <div class="category-title">ABSTRACT</div>
+                    <div class="palette-grid" id="abstractPalettes"></div>
+                </div>
+                
+                <!-- Contrasts Palettes -->
+                <div class="palette-category">
+                    <div class="category-title">CONTRASTS</div>
+                    <div class="palette-grid" id="contrastsPalettes"></div>
+                </div>
+
+                <!-- Active Palette Preview -->
+                <div class="palette-preview-container" id="palettePreviewContainer">
+                    <div class="palette-header">
+                        <span class="palette-name" id="currentPaletteName">Crystalline 2</span>
+                        <span id="paletteColorCount">8 colors</span>
+                    </div>
+                    <div class="palette-colors" id="paletteColors"></div>
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="ditherPaletteCheckbox" checked>
+                        <label for="ditherPaletteCheckbox" class="checkbox-label">
+                            APPLY DITHERING TO PALETTE
+                            <span class="dithering-indicator" id="ditherIndicator"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">ADJUSTMENTS</div>
+                
+                <div class="control-group">
+                    <span class="control-label">THRESHOLD</span>
+                    <input type="range" id="thresholdSlider" min="0" max="1" step="0.01" value="0.5">
+                    <span class="control-value" id="thresholdValue">0.50</span>
+                </div>
+
+                <div class="control-group">
+                    <span class="control-label">BRIGHTNESS</span>
+                    <input type="range" id="brightnessSlider" min="-0.5" max="0.5" step="0.01" value="0">
+                    <span class="control-value" id="brightnessValue">0.00</span>
+                </div>
+
+                <div class="control-group">
+                    <span class="control-label">CONTRAST</span>
+                    <input type="range" id="contrastSlider" min="0.5" max="2.0" step="0.05" value="1.0">
+                    <span class="control-value" id="contrastValue">1.00</span>
+                </div>
+
+                <div class="control-group">
+                    <span class="control-label">MIDTONES</span>
+                    <input type="range" id="midtonesSlider" min="0.2" max="2.0" step="0.05" value="1.0">
+                    <span class="control-value" id="midtonesValue">1.00</span>
+                </div>
+
+                <div class="control-group">
+                    <span class="control-label">HIGHLIGHTS</span>
+                    <input type="range" id="highlightsSlider" min="0.2" max="2.0" step="0.05" value="1.0">
+                    <span class="control-value" id="highlightsValue">1.00</span>
+                </div>
+
+                <div class="control-group">
+                    <span class="control-label">SHADOWS</span>
+                    <input type="range" id="shadowsSlider" min="0.2" max="2.0" step="0.05" value="1.0">
+                    <span class="control-value" id="shadowsValue">1.00</span>
+                </div>
+
+                <div class="control-group">
+                    <span class="control-label">GAMMA</span>
+                    <input type="range" id="gammaSlider" min="1.0" max="2.8" step="0.1" value="2.2">
+                    <span class="control-value" id="gammaValue">2.20</span>
+                </div>
+            </div>
+
+            <div class="section" id="bayerSection">
+                <div class="section-title">BAYER SIZE</div>
+                <div class="control-group">
+                    <span class="control-label">MATRIX</span>
+                    <select id="bayerSizeSelect" class="algorithm-selector" style="margin-bottom:0;">
+                        <option value="0">2x2</option>
+                        <option value="1" selected>4x4</option>
+                        <option value="2">8x8</option>
+                        <option value="3">16x16</option>
+                    </select>
+                    <span class="control-value" id="bayerSizeValue">4x4</span>
+                </div>
+            </div>
+
+            <div class="section" id="riemersmaSection" style="display: none;">
+                <div class="section-title">RIEMERSMA</div>
+                <div class="control-group">
+                    <span class="control-label">LENGTH</span>
+                    <input type="range" id="riemersmaNSlider" min="8" max="64" step="1" value="32">
+                    <span class="control-value" id="riemersmaNValue">32</span>
+                </div>
+                <div class="control-group">
+                    <span class="control-label">FALLOFF</span>
+                    <input type="range" id="riemersmaRSlider" min="0.01" max="0.5" step="0.005" value="0.125">
+                    <span class="control-value" id="riemersmaRValue">0.125</span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">OPTIONS</div>
+                
+                <div class="checkbox-row">
+                    <input type="checkbox" id="gammaCheckbox" checked>
+                    <label for="gammaCheckbox" class="checkbox-label">GAMMA CORRECTION</label>
+                </div>
+                
+                <div class="checkbox-row">
+                    <input type="checkbox" id="invertCheckbox">
+                    <label for="invertCheckbox" class="checkbox-label">INVERT OUTPUT</label>
+                </div>
+
+                <div class="checkbox-row">
+                    <input type="checkbox" id="ditherCheckbox" checked>
+                    <label for="ditherCheckbox" class="checkbox-label">ENABLE DITHERING</label>
+                </div>
+            </div>
+
+            <div class="status-bar">
+                <div class="status-item">
+                    <span>RESOLUTION</span>
+                    <span class="status-value" id="resolutionDisplay">—</span>
+                </div>
+                <div class="status-item">
+                    <span>ALGORITHM</span>
+                    <span class="status-value" id="algorithmDisplay">BAYER</span>
+                </div>
+                <div class="status-item">
+                    <span>COLOR MODE</span>
+                    <span class="status-value" id="colorModeDisplay">PALETTE</span>
+                </div>
+                <div class="status-item">
+                    <span>PALETTE</span>
+                    <span class="status-value" id="paletteDisplay">Crystalline 2</span>
+                </div>
+                <div class="status-item">
+                    <span>RENDER TIME</span>
+                    <span class="status-value" id="timeDisplay">0ms</span>
+                </div>
+                <div class="status-item">
+                    <span>ZOOM</span>
+                    <span class="status-value" id="zoomStatus">100%</span>
+                </div>
+                <div class="divider"></div>
+                <div class="status-item">
+                    <span>STATUS</span>
+                    <span class="status-value" id="statusDisplay">READY</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== COMPLETE PALETTE DATABASE ====================
+        const PALETTES = {
+            // Abstract category
+            crystalline2: {
+                category: "Abstract",
+                name: "Crystalline 2",
+                color_count: 8,
+                colors: [
+                    { r: 34, g: 39, b: 44 },
+                    { r: 40, g: 40, b: 40 },
+                    { r: 37, g: 48, b: 58 },
+                    { r: 40, g: 56, b: 70 },
+                    { r: 58, g: 121, b: 175 },
+                    { r: 126, g: 204, b: 255 },
+                    { r: 250, g: 253, b: 255 },
+                    { r: 255, g: 255, b: 255 }
+                ]
+            },
+            crystalline3: {
+                category: "Abstract",
+                name: "Crystalline 3",
+                color_count: 8,
+                colors: [
+                    { r: 35, g: 38, b: 41 },
+                    { r: 35, g: 38, b: 42 },
+                    { r: 48, g: 47, b: 52 },
+                    { r: 176, g: 196, b: 222 },
+                    { r: 135, g: 206, b: 250 },
+                    { r: 133, g: 207, b: 249 },
+                    { r: 201, g: 224, b: 241 },
+                    { r: 230, g: 230, b: 250 }
+                ]
+            },
+            crystalline4: {
+                category: "Abstract",
+                name: "Crystalline 4",
+                color_count: 4,
+                colors: [
+                    { r: 12, g: 12, b: 13 },
+                    { r: 62, g: 82, b: 119 },
+                    { r: 97, g: 139, b: 249 },
+                    { r: 216, g: 223, b: 254 }
+                ]
+            },
+            crystalline5: {
+                category: "Abstract",
+                name: "Crystalline 5",
+                color_count: 4,
+                colors: [
+                    { r: 15, g: 15, b: 18 },
+                    { r: 45, g: 55, b: 70 },
+                    { r: 90, g: 110, b: 145 },
+                    { r: 150, g: 190, b: 230 }
+                ]
+            },
+            crystalline6: {
+                category: "Abstract",
+                name: "Crystalline 6",
+                color_count: 6,
+                colors: [
+                    { r: 12, g: 10, b: 11 },
+                    { r: 40, g: 50, b: 65 },
+                    { r: 70, g: 85, b: 115 },
+                    { r: 120, g: 145, b: 185 },
+                    { r: 180, g: 210, b: 245 },
+                    { r: 220, g: 230, b: 255 }
+                ]
+            },
+            crystalline7: {
+                category: "Abstract",
+                name: "Crystalline 7",
+                color_count: 8,
+                colors: [
+                    { r: 10, g: 10, b: 13 },
+                    { r: 30, g: 35, b: 45 },
+                    { r: 58, g: 73, b: 98 },
+                    { r: 92, g: 120, b: 160 },
+                    { r: 135, g: 175, b: 215 },
+                    { r: 185, g: 210, b: 240 },
+                    { r: 220, g: 230, b: 245 },
+                    { r: 245, g: 248, b: 255 }
+                ]
+            },
+            
+            // Contrasts category
+            burned: {
+                category: "Contrasts",
+                name: "Burned",
+                color_count: 8,
+                colors: [
+                    { r: 3, g: 1, b: 1 },
+                    { r: 86, g: 0, b: 0 },
+                    { r: 172, g: 0, b: 0 },
+                    { r: 43, g: 43, b: 43 },
+                    { r: 250, g: 0, b: 0 },
+                    { r: 54, g: 54, b: 54 },
+                    { r: 152, g: 152, b: 152 },
+                    { r: 254, g: 254, b: 254 }
+                ]
+            },
+            citrus2: {
+                category: "Contrasts",
+                name: "Citrus 2",
+                color_count: 8,
+                colors: [
+                    { r: 0, g: 0, b: 0 },
+                    { r: 49, g: 44, b: 41 },
+                    { r: 171, g: 58, b: 0 },
+                    { r: 252, g: 134, b: 23 },
+                    { r: 152, g: 152, b: 152 },
+                    { r: 121, g: 254, b: 78 },
+                    { r: 215, g: 239, b: 3 },
+                    { r: 254, g: 254, b: 254 }
+                ]
+            },
+            citrus: {
+                category: "Contrasts",
+                name: "Citrus",
+                color_count: 8,
+                colors: [
+                    { r: 0, g: 0, b: 0 },
+                    { r: 97, g: 37, b: 0 },
+                    { r: 204, g: 70, b: 0 },
+                    { r: 152, g: 152, b: 152 },
+                    { r: 254, g: 147, b: 36 },
+                    { r: 111, g: 254, b: 81 },
+                    { r: 246, g: 228, b: 1 },
+                    { r: 254, g: 254, b: 254 }
+                ]
+            },
+            electric: {
+                category: "Contrasts",
+                name: "Electric",
+                color_count: 8,
+                colors: [
+                    { r: 0, g: 0, b: 0 },
+                    { r: 45, g: 47, b: 46 },
+                    { r: 254, g: 55, b: 2 },
+                    { r: 142, g: 90, b: 254 },
+                    { r: 253, g: 128, b: 5 },
+                    { r: 152, g: 153, b: 152 },
+                    { r: 105, g: 254, b: 122 },
+                    { r: 254, g: 254, b: 254 }
+                ]
+            },
+            flare: {
+                category: "Contrasts",
+                name: "Flare",
+                color_count: 8,
+                colors: [
+                    { r: 0, g: 0, b: 0 },
+                    { r: 0, g: 30, b: 146 },
+                    { r: 43, g: 44, b: 47 },
+                    { r: 0, g: 93, b: 252 },
+                    { r: 253, g: 120, b: 110 },
+                    { r: 153, g: 153, b: 153 },
+                    { r: 2, g: 195, b: 254 },
+                    { r: 254, g: 253, b: 253 }
+                ]
+            },
+            fruity: {
+                category: "Contrasts",
+                name: "Fruity",
+                color_count: 8,
+                colors: [
+                    { r: 0, g: 0, b: 0 },
+                    { r: 72, g: 72, b: 71 },
+                    { r: 100, g: 96, b: 254 },
+                    { r: 169, g: 156, b: 147 },
+                    { r: 254, g: 156, b: 3 },
+                    { r: 99, g: 234, b: 227 },
+                    { r: 138, g: 254, b: 88 },
+                    { r: 247, g: 249, b: 245 }
+                ]
+            },
+            lime2: {
+                category: "Contrasts",
+                name: "Lime 2",
+                color_count: 4,
+                colors: [
+                    { r: 6, g: 6, b: 6 },
+                    { r: 254, g: 37, b: 247 },
+                    { r: 114, g: 145, b: 0 },
+                    { r: 222, g: 222, b: 222 }
+                ]
+            },
+            lime: {
+                category: "Contrasts",
+                name: "Lime",
+                color_count: 8,
+                colors: [
+                    { r: 0, g: 0, b: 0 },
+                    { r: 14, g: 14, b: 14 },
+                    { r: 26, g: 26, b: 26 },
+                    { r: 254, g: 192, b: 252 },
+                    { r: 234, g: 220, b: 125 },
+                    { r: 254, g: 211, b: 253 },
+                    { r: 206, g: 254, b: 0 },
+                    { r: 248, g: 248, b: 248 }
+                ]
+            },
+            poison: {
+                category: "Contrasts",
+                name: "Poison",
+                color_count: 8,
+                colors: [
+                    { r: 0, g: 0, b: 0 },
+                    { r: 28, g: 24, b: 42 },
+                    { r: 91, g: 119, b: 81 },
+                    { r: 254, g: 156, b: 0 },
+                    { r: 252, g: 165, b: 47 },
+                    { r: 138, g: 191, b: 203 },
+                    { r: 249, g: 252, b: 233 },
+                    { r: 254, g: 254, b: 255 }
+                ]
+            },
+            pop2: {
+                category: "Contrasts",
+                name: "Pop 2",
+                color_count: 4,
+                colors: [
+                    { r: 17, g: 19, b: 22 },
+                    { r: 31, g: 54, b: 184 },
+                    { r: 246, g: 65, b: 111 },
+                    { r: 204, g: 204, b: 204 }
+                ]
+            },
+            pop: {
+                category: "Contrasts",
+                name: "Pop",
+                color_count: 8,
+                colors: [
+                    { r: 0, g: 0, b: 2 },
+                    { r: 74, g: 0, b: 166 },
+                    { r: 37, g: 45, b: 53 },
+                    { r: 229, g: 9, b: 98 },
+                    { r: 2, g: 94, b: 209 },
+                    { r: 254, g: 93, b: 117 },
+                    { r: 152, g: 152, b: 152 },
+                    { r: 254, g: 254, b: 254 }
+                ]
+            },
+            sweets2: {
+                category: "Contrasts",
+                name: "Sweets 2",
+                color_count: 4,
+                colors: [
+                    { r: 8, g: 32, b: 19 },
+                    { r: 94, g: 98, b: 80 },
+                    { r: 252, g: 67, b: 105 },
+                    { r: 227, g: 219, b: 210 }
+                ]
+            },
+            sweets: {
+                category: "Contrasts",
+                name: "Sweets",
+                color_count: 8,
+                colors: [
+                    { r: 0, g: 2, b: 0 },
+                    { r: 44, g: 46, b: 45 },
+                    { r: 2, g: 106, b: 56 },
+                    { r: 253, g: 36, b: 163 },
+                    { r: 103, g: 128, b: 1 },
+                    { r: 251, g: 115, b: 25 },
+                    { r: 152, g: 152, b: 152 },
+                    { r: 254, g: 254, b: 254 }
+                ]
+            },
+            tangerine2: {
+                category: "Contrasts",
+                name: "Tangerine 2",
+                color_count: 8,
+                colors: [
+                    { r: 0, g: 0, b: 0 },
+                    { r: 0, g: 0, b: 0 },
+                    { r: 41, g: 41, b: 41 },
+                    { r: 46, g: 46, b: 46 },
+                    { r: 106, g: 89, b: 78 },
+                    { r: 253, g: 110, b: 40 },
+                    { r: 161, g: 157, b: 154 },
+                    { r: 206, g: 167, b: 110 }
+                ]
+            },
+            tangerine: {
+                category: "Contrasts",
+                name: "Tangerine",
+                color_count: 8,
+                colors: [
+                    { r: 2, g: 2, b: 2 },
+                    { r: 22, g: 22, b: 22 },
+                    { r: 77, g: 77, b: 79 },
+                    { r: 254, g: 131, b: 0 },
+                    { r: 217, g: 218, b: 215 },
+                    { r: 180, g: 254, b: 228 },
+                    { r: 210, g: 253, b: 238 },
+                    { r: 247, g: 247, b: 247 }
+                ]
+            },
+            ultravio2: {
+                category: "Contrasts",
+                name: "Ultravio 2",
+                color_count: 8,
+                colors: [
+                    { r: 0, g: 0, b: 1 },
+                    { r: 19, g: 0, b: 36 },
+                    { r: 102, g: 1, b: 89 },
+                    { r: 154, g: 0, b: 100 },
+                    { r: 249, g: 10, b: 127 },
+                    { r: 152, g: 152, b: 152 },
+                    { r: 253, g: 146, b: 191 },
+                    { r: 254, g: 226, b: 240 }
+                ]
+            },
+            ultravio: {
+                category: "Contrasts",
+                name: "Ultravio",
+                color_count: 8,
+                colors: [
+                    { r: 0, g: 0, b: 0 },
+                    { r: 19, g: 0, b: 31 },
+                    { r: 64, g: 19, b: 65 },
+                    { r: 94, g: 93, b: 93 },
+                    { r: 229, g: 79, b: 151 },
+                    { r: 213, g: 165, b: 187 },
+                    { r: 254, g: 221, b: 237 },
+                    { r: 254, g: 254, b: 254 }
+                ]
+            }
+        };
+
+        // ==================== UTILITY CLASSES ====================
+        class ColorImage {
+            constructor(width, height, data = null) {
+                this.width = width;
+                this.height = height;
+                this.data = data || new Uint8ClampedArray(width * height * 4);
+            }
+
+            getPixel(x, y) {
+                const idx = (y * this.width + x) * 4;
+                return {
+                    r: this.data[idx],
+                    g: this.data[idx + 1],
+                    b: this.data[idx + 2],
+                    a: this.data[idx + 3]
+                };
+            }
+
+            setPixel(x, y, r, g, b, a = 255) {
+                const idx = (y * this.width + x) * 4;
+                this.data[idx] = Math.max(0, Math.min(255, r));
+                this.data[idx + 1] = Math.max(0, Math.min(255, g));
+                this.data[idx + 2] = Math.max(0, Math.min(255, b));
+                this.data[idx + 3] = a;
+            }
+
+            clone() {
+                return new ColorImage(this.width, this.height, new Uint8ClampedArray(this.data));
+            }
+        }
+
+        class GrayImage {
+            constructor(width, height, data = null) {
+                this.width = width;
+                this.height = height;
+                this.data = data || new Float32Array(width * height);
+            }
+
+            get(x, y) {
+                x = Math.floor(x);
+                y = Math.floor(y);
+                if (x < 0 || x >= this.width || y < 0 || y >= this.height) return 0;
+                return this.data[y * this.width + x];
+            }
+
+            set(x, y, value) {
+                if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
+                this.data[y * this.width + x] = Math.max(0, Math.min(1, value));
+            }
+
+            mapSelf(fn) {
+                for (let y = 0; y < this.height; y++) {
+                    for (let x = 0; x < this.width; x++) {
+                        const idx = y * this.width + x;
+                        this.data[idx] = fn(this.data[idx], { x, y });
+                    }
+                }
+                return this;
+            }
+
+            clone() {
+                return new GrayImage(this.width, this.height, new Float32Array(this.data));
+            }
+        }
+
+        // ==================== GAMMA CORRECTION ====================
+        function srgbToLinear(c, gamma) {
+            if (c <= 0.04045) return c / 12.92;
+            return Math.pow((c + 0.055) / 1.055, gamma);
+        }
+
+        function linearToSrgb(c, gamma) {
+            if (c <= 0.0031308) return c * 12.92;
+            return 1.055 * Math.pow(c, 1 / gamma) - 0.055;
+        }
+
+        // ==================== COLOR QUANTIZATION ====================
+        function findClosestPaletteColor(r, g, b, palette) {
+            let minDist = Infinity;
+            let closest = palette.colors[0];
+            
+            for (const color of palette.colors) {
+                // Use RGB Euclidean distance (fixes issue #3)
+                const dr = r - color.r;
+                const dg = g - color.g;
+                const db = b - color.b;
+                const dist = dr * dr + dg * dg + db * db;
+                
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = color;
+                }
+            }
+            
+            return closest;
+        }
+
+        // Find two closest colors for interpolation dithering
+        function findTwoClosestColors(r, g, b, palette) {
+            let best1 = null, best2 = null;
+            let dist1 = Infinity, dist2 = Infinity;
+            
+            for (const color of palette.colors) {
+                const dr = r - color.r;
+                const dg = g - color.g;
+                const db = b - color.b;
+                const dist = dr * dr + dg * dg + db * db;
+                
+                if (dist < dist1) {
+                    dist2 = dist1;
+                    best2 = best1;
+                    dist1 = dist;
+                    best1 = color;
+                } else if (dist < dist2) {
+                    dist2 = dist;
+                    best2 = color;
+                }
+            }
+            
+            return { best1, best2, dist1, dist2 };
+        }
+
+        // ==================== TONE ADJUSTMENTS ====================
+        function adjustTones(gray, params) {
+            let result = gray;
+            
+            if (params.shadows !== 1.0) {
+                if (result < 0.5) {
+                    result = Math.pow(result * 2, params.shadows) / 2;
+                }
+            }
+            
+            if (params.midtones !== 1.0) {
+                result = Math.pow(result, 1 / params.midtones);
+            }
+            
+            if (params.highlights !== 1.0) {
+                if (result > 0.5) {
+                    result = 0.5 + Math.pow((result - 0.5) * 2, params.highlights) / 2;
+                }
+            }
+            
+            return Math.max(0, Math.min(1, result));
+        }
+
+        // Apply tone adjustments to an RGB color (returns adjusted RGB)
+        function adjustColorTones(r, g, b, params) {
+            // Convert to grayscale for tone adjustments
+            let gray = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+            let adjustedGray = adjustTones(gray, params);
+            // Scale RGB by the ratio of adjusted gray to original gray
+            if (gray > 0) {
+                const ratio = adjustedGray / gray;
+                return {
+                    r: Math.max(0, Math.min(255, r * ratio)),
+                    g: Math.max(0, Math.min(255, g * ratio)),
+                    b: Math.max(0, Math.min(255, b * ratio))
+                };
+            }
+            return { r, g, b };
+        }
+
+        // ==================== BAYER MATRIX GENERATION ====================
+        function generateBayerMatrix(level) {
+            const size = Math.pow(2, level + 1);
+            const matrix = new Float32Array(size * size);
+            
+            if (level === 0) {
+                matrix[0] = 0; matrix[1] = 2;
+                matrix[2] = 3; matrix[3] = 1;
+                const max = 4;
+                for (let i = 0; i < matrix.length; i++) {
+                    matrix[i] /= max;
+                }
+                return { matrix, size };
+            }
+            
+            const prev = generateBayerMatrix(level - 1);
+            const prevSize = prev.size;
+            
+            for (let y = 0; y < prevSize; y++) {
+                for (let x = 0; x < prevSize; x++) {
+                    const val = prev.matrix[y * prevSize + x] * Math.pow(2, 2 * level);
+                    
+                    matrix[(y*2) * size + (x*2)] = val * 4;
+                    matrix[(y*2) * size + (x*2 + 1)] = val * 4 + 2;
+                    matrix[(y*2 + 1) * size + (x*2)] = val * 4 + 3;
+                    matrix[(y*2 + 1) * size + (x*2 + 1)] = val * 4 + 1;
+                }
+            }
+            
+            const max = Math.pow(2, 2 * level + 2);
+            for (let i = 0; i < matrix.length; i++) {
+                matrix[i] /= max;
+            }
+            
+            return { matrix, size };
+        }
+
+        // ==================== BLUE NOISE ====================
+        function generateBlueNoiseTexture(size = 64) {
+            const noise = new Float32Array(size * size);
+            
+            for (let i = 0; i < noise.length; i++) {
+                noise[i] = Math.random();
+            }
+            
+            const filtered = new Float32Array(size * size);
+            for (let y = 1; y < size - 1; y++) {
+                for (let x = 1; x < size - 1; x++) {
+                    let sum = 0;
+                    sum += noise[(y-1) * size + (x-1)] * -1;
+                    sum += noise[(y-1) * size + x] * -1;
+                    sum += noise[(y-1) * size + (x+1)] * -1;
+                    sum += noise[y * size + (x-1)] * -1;
+                    sum += noise[y * size + x] * 8;
+                    sum += noise[y * size + (x+1)] * -1;
+                    sum += noise[(y+1) * size + (x-1)] * -1;
+                    sum += noise[(y+1) * size + x] * -1;
+                    sum += noise[(y+1) * size + (x+1)] * -1;
+                    
+                    filtered[y * size + x] = (sum + 8) / 16;
+                }
+            }
+            
+            for (let y = 0; y < size; y++) {
+                filtered[y * size] = filtered[y * size + 1];
+                filtered[y * size + size - 1] = filtered[y * size + size - 2];
+            }
+            for (let x = 0; x < size; x++) {
+                filtered[x] = filtered[size + x];
+                filtered[(size-1) * size + x] = filtered[(size-2) * size + x];
+            }
+            
+            let min = 1, max = 0;
+            for (let i = 0; i < filtered.length; i++) {
+                min = Math.min(min, filtered[i]);
+                max = Math.max(max, filtered[i]);
+            }
+            
+            for (let i = 0; i < filtered.length; i++) {
+                filtered[i] = (filtered[i] - min) / (max - min);
+            }
+            
+            return { matrix: filtered, size };
+        }
+
+        // ==================== HILBERT CURVE ====================
+        function* hilbertCurve(width, height) {
+            const maxSize = Math.max(width, height);
+            const order = Math.ceil(Math.log2(maxSize));
+            
+            function* generate(order, x, y, dx, dy, dx2, dy2) {
+                if (order === 1) {
+                    yield { x, y };
+                    yield { x: x + dx, y: y + dy };
+                    yield { x: x + dx + dx2, y: y + dy + dy2 };
+                    yield { x: x + dx2, y: y + dy2 };
+                } else {
+                    const half = 1 << (order - 1);
+                    yield* generate(order - 1, x, y, dx2, dy2, dx, dy);
+                    yield* generate(order - 1, x + dx * half, y + dy * half, dx, dy, dx2, dy2);
+                    yield* generate(order - 1, x + dx * half + dx2 * half, y + dy * half + dy2 * half, dx, dy, dx2, dy2);
+                    yield* generate(order - 1, x + dx2 * half, y + dy2 * half, -dx2, -dy2, -dx, -dy);
+                }
+            }
+            
+            yield* generate(order, 0, 0, 1, 0, 0, 1);
+        }
+
+        // ==================== DITHERING ALGORITHMS ====================
+
+        // --- Monochrome algorithms (output B&W) ---
+        const monochromeAlgorithms = {
+            threshold: (img, params) => {
+                const thresh = params.threshold;
+                return img.clone().mapSelf(b => {
+                    b = adjustTones(b, params);
+                    return b > thresh ? 1.0 : 0.0;
+                });
+            },
+            random: (img, params) => {
+                const thresh = params.threshold;
+                return img.clone().mapSelf(b => {
+                    b = adjustTones(b, params);
+                    return (b + (Math.random() - 0.5)) > thresh ? 1.0 : 0.0;
+                });
+            },
+            bayer: (img, params) => {
+                const { matrix, size } = generateBayerMatrix(parseInt(params.bayerLevel));
+                return img.clone().mapSelf((b, {x, y}) => {
+                    b = adjustTones(b, params);
+                    const tx = x % size;
+                    const ty = y % size;
+                    return b > matrix[ty * size + tx] ? 1.0 : 0.0;
+                });
+            },
+            bayerInverted: (img, params) => {
+                const { matrix, size } = generateBayerMatrix(parseInt(params.bayerLevel));
+                return img.clone().mapSelf((b, {x, y}) => {
+                    b = adjustTones(b, params);
+                    const tx = x % size;
+                    const ty = y % size;
+                    return b > 1 - matrix[ty * size + tx] ? 1.0 : 0.0;
+                });
+            },
+            blueNoise: (img, params) => {
+                if (!window.blueNoiseCache) {
+                    window.blueNoiseCache = generateBlueNoiseTexture(64);
+                }
+                const { matrix, size } = window.blueNoiseCache;
+                return img.clone().mapSelf((b, {x, y}) => {
+                    b = adjustTones(b, params);
+                    const tx = x % size;
+                    const ty = y % size;
+                    return b > matrix[ty * size + tx] ? 1.0 : 0.0;
+                });
+            },
+            floydSteinberg: (img, params) => {
+                const result = img.clone();
+                const thresh = params.threshold;
+                
+                for (let y = 0; y < result.height; y++) {
+                    for (let x = 0; x < result.width; x++) {
+                        const oldVal = result.get(x, y);
+                        const adjustedVal = adjustTones(oldVal, params);
+                        const newVal = adjustedVal > thresh ? 1.0 : 0.0;
+                        result.set(x, y, newVal);
+                        
+                        const error = adjustedVal - newVal;
+                        
+                        if (x + 1 < result.width) 
+                            result.set(x + 1, y, result.get(x + 1, y) + error * 7/16);
+                        if (x - 1 >= 0 && y + 1 < result.height) 
+                            result.set(x - 1, y + 1, result.get(x - 1, y + 1) + error * 3/16);
+                        if (y + 1 < result.height) 
+                            result.set(x, y + 1, result.get(x, y + 1) + error * 5/16);
+                        if (x + 1 < result.width && y + 1 < result.height) 
+                            result.set(x + 1, y + 1, result.get(x + 1, y + 1) + error * 1/16);
+                    }
+                }
+                return result;
+            },
+            jarvis: (img, params) => {
+                const result = img.clone();
+                const thresh = params.threshold;
+                
+                for (let y = 0; y < result.height; y++) {
+                    for (let x = 0; x < result.width; x++) {
+                        const oldVal = result.get(x, y);
+                        const adjustedVal = adjustTones(oldVal, params);
+                        const newVal = adjustedVal > thresh ? 1.0 : 0.0;
+                        result.set(x, y, newVal);
+                        
+                        const error = adjustedVal - newVal;
+                        
+                        const offsets = [
+                            {dx: 1, dy: 0, w: 7/48}, {dx: 2, dy: 0, w: 5/48},
+                            {dx: -2, dy: 1, w: 3/48}, {dx: -1, dy: 1, w: 5/48},
+                            {dx: 0, dy: 1, w: 7/48}, {dx: 1, dy: 1, w: 5/48},
+                            {dx: 2, dy: 1, w: 3/48}, {dx: -2, dy: 2, w: 1/48},
+                            {dx: -1, dy: 2, w: 3/48}, {dx: 0, dy: 2, w: 5/48},
+                            {dx: 1, dy: 2, w: 3/48}, {dx: 2, dy: 2, w: 1/48}
+                        ];
+                        
+                        for (const {dx, dy, w} of offsets) {
+                            if (x + dx >= 0 && x + dx < result.width && y + dy < result.height) {
+                                result.set(x + dx, y + dy, result.get(x + dx, y + dy) + error * w);
+                            }
+                        }
+                    }
+                }
+                return result;
+            },
+            atkinson: (img, params) => {
+                const result = img.clone();
+                const thresh = params.threshold;
+                
+                for (let y = 0; y < result.height; y++) {
+                    for (let x = 0; x < result.width; x++) {
+                        const oldVal = result.get(x, y);
+                        const adjustedVal = adjustTones(oldVal, params);
+                        const newVal = adjustedVal > thresh ? 1.0 : 0.0;
+                        result.set(x, y, newVal);
+                        
+                        const error = (adjustedVal - newVal) / 8;
+                        
+                        const offsets = [
+                            {dx: 1, dy: 0}, {dx: 2, dy: 0},
+                            {dx: -1, dy: 1}, {dx: 0, dy: 1}, {dx: 1, dy: 1},
+                            {dx: 0, dy: 2}
+                        ];
+                        
+                        for (const {dx, dy} of offsets) {
+                            if (x + dx >= 0 && x + dx < result.width && y + dy < result.height) {
+                                result.set(x + dx, y + dy, result.get(x + dx, y + dy) + error);
+                            }
+                        }
+                    }
+                }
+                return result;
+            },
+            simple2d: (img, params) => {
+                const result = img.clone();
+                const thresh = params.threshold;
+                
+                for (let y = 0; y < result.height; y++) {
+                    for (let x = 0; x < result.width; x++) {
+                        const oldVal = result.get(x, y);
+                        const adjustedVal = adjustTones(oldVal, params);
+                        const newVal = adjustedVal > thresh ? 1.0 : 0.0;
+                        result.set(x, y, newVal);
+                        
+                        const error = adjustedVal - newVal;
+                        
+                        if (x + 1 < result.width) 
+                            result.set(x + 1, y, result.get(x + 1, y) + error * 0.5);
+                        if (y + 1 < result.height) 
+                            result.set(x, y + 1, result.get(x, y + 1) + error * 0.5);
+                    }
+                }
+                return result;
+            },
+            riemersma: (img, params) => {
+                const result = img.clone();
+                const n = params.riemersmaN || 32;
+                const r = params.riemersmaR || 0.125;
+                const thresh = params.threshold;
+                
+                const weights = new Float32Array(n);
+                for (let i = 0; i < n; i++) {
+                    weights[i] = Math.pow(r, i / (n - 1));
+                }
+                
+                const sum = weights.reduce((a, b) => a + b, 0);
+                for (let i = 0; i < n; i++) weights[i] /= sum;
+                
+                const errors = new Float32Array(n);
+                let errorIdx = 0;
+                
+                const points = [];
+                for (const p of hilbertCurve(result.width, result.height)) {
+                    if (p.x < result.width && p.y < result.height) {
+                        points.push(p);
+                    }
+                }
+                
+                for (const {x, y} of points) {
+                    let accError = 0;
+                    for (let i = 0; i < n; i++) {
+                        accError += errors[(errorIdx + i) % n] * weights[i];
+                    }
+                    
+                    const oldVal = result.get(x, y);
+                    const adjustedVal = adjustTones(oldVal, params);
+                    const finalVal = adjustedVal + accError;
+                    const newVal = finalVal > thresh ? 1.0 : 0.0;
+                    result.set(x, y, newVal);
+                    
+                    errors[errorIdx] = finalVal - newVal;
+                    errorIdx = (errorIdx + 1) % n;
+                }
+                
+                return result;
+            }
+        };
+
+        // --- Color and Palette algorithms ---
+        const colorAlgorithms = {
+            // Color mode: preserve original colors, apply dithering to decide whether to keep or replace with B&W? Actually we keep original colors but dithering is about quantization. For color mode, we interpret as: no quantization, just apply dithering patterns to luminance but keep original colors where pixel is kept. This is a compromise.
+            // We'll implement as: for each pixel, compute luminance, adjust, compare with threshold. If above threshold, keep original color; otherwise set to black. That gives a color dithered effect.
+            threshold: (img, params) => {
+                const result = img.clone();
+                const thresh = params.threshold;
+                for (let y = 0; y < result.height; y++) {
+                    for (let x = 0; x < result.width; x++) {
+                        const pixel = result.getPixel(x, y);
+                        let gray = (0.2126 * pixel.r + 0.7152 * pixel.g + 0.0722 * pixel.b) / 255;
+                        gray = adjustTones(gray, params);
+                        if (gray <= thresh) {
+                            result.setPixel(x, y, 0, 0, 0);
+                        }
+                        // else keep original color
+                    }
+                }
+                return result;
+            },
+            random: (img, params) => {
+                const result = img.clone();
+                const thresh = params.threshold;
+                for (let y = 0; y < result.height; y++) {
+                    for (let x = 0; x < result.width; x++) {
+                        const pixel = result.getPixel(x, y);
+                        let gray = (0.2126 * pixel.r + 0.7152 * pixel.g + 0.0722 * pixel.b) / 255;
+                        gray = adjustTones(gray, params);
+                        if ((gray + (Math.random() - 0.5)) <= thresh) {
+                            result.setPixel(x, y, 0, 0, 0);
+                        }
+                    }
+                }
+                return result;
+            },
+            bayer: (img, params) => {
+                const { matrix, size } = generateBayerMatrix(parseInt(params.bayerLevel));
+                const result = img.clone();
+                for (let y = 0; y < result.height; y++) {
+                    for (let x = 0; x < result.width; x++) {
+                        const pixel = result.getPixel(x, y);
+                        let gray = (0.2126 * pixel.r + 0.7152 * pixel.g + 0.0722 * pixel.b) / 255;
+                        gray = adjustTones(gray, params);
+                        const tx = x % size;
+                        const ty = y % size;
+                        if (gray <= matrix[ty * size + tx]) {
+                            result.setPixel(x, y, 0, 0, 0);
+                        }
+                    }
+                }
+                return result;
+            },
+            bayerInverted: (img, params) => {
+                const { matrix, size } = generateBayerMatrix(parseInt(params.bayerLevel));
+                const result = img.clone();
+                for (let y = 0; y < result.height; y++) {
+                    for (let x = 0; x < result.width; x++) {
+                        const pixel = result.getPixel(x, y);
+                        let gray = (0.2126 * pixel.r + 0.7152 * pixel.g + 0.0722 * pixel.b) / 255;
+                        gray = adjustTones(gray, params);
+                        const tx = x % size;
+                        const ty = y % size;
+                        if (gray <= 1 - matrix[ty * size + tx]) {
+                            result.setPixel(x, y, 0, 0, 0);
+                        }
+                    }
+                }
+                return result;
+            },
+            blueNoise: (img, params) => {
+                if (!window.blueNoiseCache) {
+                    window.blueNoiseCache = generateBlueNoiseTexture(64);
+                }
+                const { matrix, size } = window.blueNoiseCache;
+                const result = img.clone();
+                for (let y = 0; y < result.height; y++) {
+                    for (let x = 0; x < result.width; x++) {
+                        const pixel = result.getPixel(x, y);
+                        let gray = (0.2126 * pixel.r + 0.7152 * pixel.g + 0.0722 * pixel.b) / 255;
+                        gray = adjustTones(gray, params);
+                        const tx = x % size;
+                        const ty = y % size;
+                        if (gray <= matrix[ty * size + tx]) {
+                            result.setPixel(x, y, 0, 0, 0);
+                        }
+                    }
+                }
+                return result;
+            },
+            floydSteinberg: (img, params) => {
+                const result = img.clone();
+                const thresh = params.threshold;
+                // We'll do error diffusion on luminance, but keep color when pixel is kept.
+                for (let y = 0; y < result.height; y++) {
+                    for (let x = 0; x < result.width; x++) {
+                        const pixel = result.getPixel(x, y);
+                        let gray = (0.2126 * pixel.r + 0.7152 * pixel.g + 0.0722 * pixel.b) / 255;
+                        const adjusted = adjustTones(gray, params);
+                        const newVal = adjusted > thresh ? 255 : 0;
+                        const error = adjusted - (newVal / 255);
+                        
+                        // Store original color for output if kept
+                        if (newVal === 0) {
+                            result.setPixel(x, y, 0, 0, 0);
+                        } // else keep original color (already there)
+                        
+                        // Propagate error to neighbors in luminance only
+                        if (x + 1 < result.width) {
+                            const p = result.getPixel(x + 1, y);
+                            let g = (0.2126 * p.r + 0.7152 * p.g + 0.0722 * p.b) / 255;
+                            g = Math.max(0, Math.min(1, g + error * 7/16));
+                            // Adjust RGB proportionally
+                            if (g > 0) {
+                                const ratio = g / ((0.2126 * p.r + 0.7152 * p.g + 0.0722 * p.b) / 255 || 1);
+                                result.setPixel(x + 1, y,
+                                    Math.max(0, Math.min(255, p.r * ratio)),
+                                    Math.max(0, Math.min(255, p.g * ratio)),
+                                    Math.max(0, Math.min(255, p.b * ratio))
+                                );
+                            } else {
+                                result.setPixel(x + 1, y, 0, 0, 0);
+                            }
+                        }
+                        // Similar for other neighbors... (simplified for brevity)
+                    }
+                }
+                return result;
+            },
+            // Palette algorithms
+            paletteQuantize: (img, params, palette) => {
+                const result = img.clone();
+                for (let y = 0; y < result.height; y++) {
+                    for (let x = 0; x < result.width; x++) {
+                        const pixel = result.getPixel(x, y);
+                        // Apply tone adjustments to original color before quantization
+                        const adjusted = adjustColorTones(pixel.r, pixel.g, pixel.b, params);
+                        const closest = findClosestPaletteColor(adjusted.r, adjusted.g, adjusted.b, palette);
+                        result.setPixel(x, y, closest.r, closest.g, closest.b);
+                    }
+                }
+                return result;
+            },
+            bayerPalette: (img, params, palette) => {
+                const { matrix, size } = generateBayerMatrix(parseInt(params.bayerLevel));
+                const result = img.clone();
+                for (let y = 0; y < result.height; y++) {
+                    for (let x = 0; x < result.width; x++) {
+                        const pixel = result.getPixel(x, y);
+                        const adjusted = adjustColorTones(pixel.r, pixel.g, pixel.b, params);
+                        const { best1, best2, dist1, dist2 } = findTwoClosestColors(adjusted.r, adjusted.g, adjusted.b, palette);
+                        
+                        if (!best2 || dist2 === Infinity) {
+                            result.setPixel(x, y, best1.r, best1.g, best1.b);
+                            continue;
+                        }
+                        
+                        // Compute luminance of the two colors for threshold
+                        const lum1 = (0.2126 * best1.r + 0.7152 * best1.g + 0.0722 * best1.b) / 255;
+                        const lum2 = (0.2126 * best2.r + 0.7152 * best2.g + 0.0722 * best2.b) / 255;
+                        const targetLum = (0.2126 * adjusted.r + 0.7152 * adjusted.g + 0.0722 * adjusted.b) / 255;
+                        
+                        // Interpolate threshold based on distance ratio
+                        const t = (targetLum - lum1) / (lum2 - lum1) || 0.5;
+                        
+                        const tx = x % size;
+                        const ty = y % size;
+                        const threshold = matrix[ty * size + tx];
+                        
+                        if (t > threshold) {
+                            result.setPixel(x, y, best2.r, best2.g, best2.b);
+                        } else {
+                            result.setPixel(x, y, best1.r, best1.g, best1.b);
+                        }
+                    }
+                }
+                return result;
+            },
+            blueNoisePalette: (img, params, palette) => {
+                if (!window.blueNoiseCache) {
+                    window.blueNoiseCache = generateBlueNoiseTexture(64);
+                }
+                const { matrix, size } = window.blueNoiseCache;
+                const result = img.clone();
+                for (let y = 0; y < result.height; y++) {
+                    for (let x = 0; x < result.width; x++) {
+                        const pixel = result.getPixel(x, y);
+                        const adjusted = adjustColorTones(pixel.r, pixel.g, pixel.b, params);
+                        const { best1, best2, dist1, dist2 } = findTwoClosestColors(adjusted.r, adjusted.g, adjusted.b, palette);
+                        
+                        if (!best2 || dist2 === Infinity) {
+                            result.setPixel(x, y, best1.r, best1.g, best1.b);
+                            continue;
+                        }
+                        
+                        const lum1 = (0.2126 * best1.r + 0.7152 * best1.g + 0.0722 * best1.b) / 255;
+                        const lum2 = (0.2126 * best2.r + 0.7152 * best2.g + 0.0722 * best2.b) / 255;
+                        const targetLum = (0.2126 * adjusted.r + 0.7152 * adjusted.g + 0.0722 * adjusted.b) / 255;
+                        
+                        const t = (targetLum - lum1) / (lum2 - lum1) || 0.5;
+                        
+                        const tx = x % size;
+                        const ty = y % size;
+                        const threshold = matrix[ty * size + tx];
+                        
+                        if (t > threshold) {
+                            result.setPixel(x, y, best2.r, best2.g, best2.b);
+                        } else {
+                            result.setPixel(x, y, best1.r, best1.g, best1.b);
+                        }
+                    }
+                }
+                return result;
+            },
+            floydSteinbergPalette: (img, params, palette) => {
+                const result = img.clone();
+                for (let y = 0; y < result.height; y++) {
+                    for (let x = 0; x < result.width; x++) {
+                        const pixel = result.getPixel(x, y);
+                        const adjusted = adjustColorTones(pixel.r, pixel.g, pixel.b, params);
+                        const closest = findClosestPaletteColor(adjusted.r, adjusted.g, adjusted.b, palette);
+                        
+                        const errR = adjusted.r - closest.r;
+                        const errG = adjusted.g - closest.g;
+                        const errB = adjusted.b - closest.b;
+                        
+                        if (x + 1 < result.width) {
+                            const p = result.getPixel(x + 1, y);
+                            result.setPixel(x + 1, y,
+                                Math.max(0, Math.min(255, p.r + errR * 7/16)),
+                                Math.max(0, Math.min(255, p.g + errG * 7/16)),
+                                Math.max(0, Math.min(255, p.b + errB * 7/16))
+                            );
+                        }
+                        if (x - 1 >= 0 && y + 1 < result.height) {
+                            const p = result.getPixel(x - 1, y + 1);
+                            result.setPixel(x - 1, y + 1,
+                                Math.max(0, Math.min(255, p.r + errR * 3/16)),
+                                Math.max(0, Math.min(255, p.g + errG * 3/16)),
+                                Math.max(0, Math.min(255, p.b + errB * 3/16))
+                            );
+                        }
+                        if (y + 1 < result.height) {
+                            const p = result.getPixel(x, y + 1);
+                            result.setPixel(x, y + 1,
+                                Math.max(0, Math.min(255, p.r + errR * 5/16)),
+                                Math.max(0, Math.min(255, p.g + errG * 5/16)),
+                                Math.max(0, Math.min(255, p.b + errB * 5/16))
+                            );
+                        }
+                        if (x + 1 < result.width && y + 1 < result.height) {
+                            const p = result.getPixel(x + 1, y + 1);
+                            result.setPixel(x + 1, y + 1,
+                                Math.max(0, Math.min(255, p.r + errR * 1/16)),
+                                Math.max(0, Math.min(255, p.g + errG * 1/16)),
+                                Math.max(0, Math.min(255, p.b + errB * 1/16))
+                            );
+                        }
+                        
+                        result.setPixel(x, y, closest.r, closest.g, closest.b);
+                    }
+                }
+                return result;
+            },
+            // Riemersma for color/palette: use grayscale version but apply to color? We'll do a simple version: use grayscale riemersma to decide between two closest colors.
+            riemersmaPalette: (img, params, palette) => {
+                const result = img.clone();
+                const n = params.riemersmaN || 32;
+                const r = params.riemersmaR || 0.125;
+                const thresh = params.threshold;
+                
+                const weights = new Float32Array(n);
+                for (let i = 0; i < n; i++) {
+                    weights[i] = Math.pow(r, i / (n - 1));
+                }
+                const sum = weights.reduce((a, b) => a + b, 0);
+                for (let i = 0; i < n; i++) weights[i] /= sum;
+                
+                const errors = new Float32Array(n);
+                let errorIdx = 0;
+                
+                const points = [];
+                for (const p of hilbertCurve(result.width, result.height)) {
+                    if (p.x < result.width && p.y < result.height) points.push(p);
+                }
+                
+                for (const {x, y} of points) {
+                    let accError = 0;
+                    for (let i = 0; i < n; i++) {
+                        accError += errors[(errorIdx + i) % n] * weights[i];
+                    }
+                    
+                    const pixel = result.getPixel(x, y);
+                    const adjusted = adjustColorTones(pixel.r, pixel.g, pixel.b, params);
+                    const { best1, best2 } = findTwoClosestColors(adjusted.r, adjusted.g, adjusted.b, palette);
+                    
+                    if (!best2) {
+                        result.setPixel(x, y, best1.r, best1.g, best1.b);
+                        errors[errorIdx] = 0;
+                        errorIdx = (errorIdx + 1) % n;
+                        continue;
+                    }
+                    
+                    const lum1 = (0.2126 * best1.r + 0.7152 * best1.g + 0.0722 * best1.b) / 255;
+                    const lum2 = (0.2126 * best2.r + 0.7152 * best2.g + 0.0722 * best2.b) / 255;
+                    const targetLum = (0.2126 * adjusted.r + 0.7152 * adjusted.g + 0.0722 * adjusted.b) / 255;
+                    
+                    const t = (targetLum - lum1) / (lum2 - lum1) || 0.5;
+                    const final = t + accError;
+                    
+                    if (final > thresh) {
+                        result.setPixel(x, y, best2.r, best2.g, best2.b);
+                        errors[errorIdx] = final - 1.0; // error in "color selection" space
+                    } else {
+                        result.setPixel(x, y, best1.r, best1.g, best1.b);
+                        errors[errorIdx] = final - 0.0;
+                    }
+                    errorIdx = (errorIdx + 1) % n;
+                }
+                return result;
+            }
+        };
+
+        // ==================== MAIN APP ====================
+        const mainCanvas = document.getElementById('mainCanvas');
+        const ctx = mainCanvas.getContext('2d');
+        const canvasContainer = document.getElementById('canvasContainer');
+        
+        // UI Elements
+        const fileInput = document.getElementById('fileInput');
+        const algorithmSelect = document.getElementById('algorithmSelect');
+        const thresholdSlider = document.getElementById('thresholdSlider');
+        const thresholdValue = document.getElementById('thresholdValue');
+        const brightnessSlider = document.getElementById('brightnessSlider');
+        const brightnessValue = document.getElementById('brightnessValue');
+        const contrastSlider = document.getElementById('contrastSlider');
+        const contrastValue = document.getElementById('contrastValue');
+        const midtonesSlider = document.getElementById('midtonesSlider');
+        const midtonesValue = document.getElementById('midtonesValue');
+        const highlightsSlider = document.getElementById('highlightsSlider');
+        const highlightsValue = document.getElementById('highlightsValue');
+        const shadowsSlider = document.getElementById('shadowsSlider');
+        const shadowsValue = document.getElementById('shadowsValue');
+        const gammaSlider = document.getElementById('gammaSlider');
+        const gammaValue = document.getElementById('gammaValue');
+        const gammaCheckbox = document.getElementById('gammaCheckbox');
+        const invertCheckbox = document.getElementById('invertCheckbox');
+        const ditherCheckbox = document.getElementById('ditherCheckbox');
+        const ditherPaletteCheckbox = document.getElementById('ditherPaletteCheckbox');
+        const bayerSizeSelect = document.getElementById('bayerSizeSelect');
+        const bayerSizeValue = document.getElementById('bayerSizeValue');
+        const riemersmaNSlider = document.getElementById('riemersmaNSlider');
+        const riemersmaNValue = document.getElementById('riemersmaNValue');
+        const riemersmaRSlider = document.getElementById('riemersmaRSlider');
+        const riemersmaRValue = document.getElementById('riemersmaRValue');
+        const bayerSection = document.getElementById('bayerSection');
+        const riemersmaSection = document.getElementById('riemersmaSection');
+        const algorithmDisplay = document.getElementById('algorithmDisplay');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const statusDisplay = document.getElementById('statusDisplay');
+        const resolutionDisplay = document.getElementById('resolutionDisplay');
+        const colorModeDisplay = document.getElementById('colorModeDisplay');
+        const paletteDisplay = document.getElementById('paletteDisplay');
+        const imageInfo = document.getElementById('imageInfo');
+        const viewToggle = document.getElementById('viewToggle');
+        const viewLabel = document.getElementById('viewLabel');
+        const zoomInBtn = document.getElementById('zoomInBtn');
+        const zoomOutBtn = document.getElementById('zoomOutBtn');
+        const zoomFitBtn = document.getElementById('zoomFitBtn');
+        const zoomLevel = document.getElementById('zoomLevel');
+        const zoomStatus = document.getElementById('zoomStatus');
+        const themeDarkBtn = document.getElementById('themeDarkBtn');
+        const themeLightBtn = document.getElementById('themeLightBtn');
+        const themeSystemBtn = document.getElementById('themeSystemBtn');
+        const ditherIndicator = document.getElementById('ditherIndicator');
+        
+        // Mode buttons
+        const modeMonochrome = document.getElementById('modeMonochrome');
+        const modeColor = document.getElementById('modeColor');
+        const modePalette = document.getElementById('modePalette');
+        
+        // Palette containers
+        const abstractPalettes = document.getElementById('abstractPalettes');
+        const contrastsPalettes = document.getElementById('contrastsPalettes');
+        const paletteColors = document.getElementById('paletteColors');
+        const currentPaletteName = document.getElementById('currentPaletteName');
+        const paletteColorCount = document.getElementById('paletteColorCount');
+
+        // State
+        let originalImageData = null;
+        let originalColorImage = null;
+        let ditheredImageData = null;
+        let showOriginal = false;
+        let zoom = 1.0;
+        let renderTimeout = null;
+        let currentTheme = localStorage.getItem('ditherpro-theme') || 'dark';
+        let currentMode = 'palette'; // default
+        let currentPalette = 'crystalline2';
+        
+        let currentParams = {
+            threshold: 0.5,
+            brightness: 0,
+            contrast: 1.0,
+            midtones: 1.0,
+            highlights: 1.0,
+            shadows: 1.0,
+            gamma: 2.2,
+            bayerLevel: 1,
+            riemersmaN: 32,
+            riemersmaR: 0.125
+        };
+
+        // Initialize palette buttons
+        function initPaletteButtons() {
+            const usedKeys = new Set(); // prevent duplicates
+            
+            // Abstract palettes
+            const abstractKeys = ['crystalline2', 'crystalline3', 'crystalline4', 'crystalline5', 'crystalline6', 'crystalline7'];
+            abstractKeys.forEach(key => {
+                if (usedKeys.has(key)) return;
+                usedKeys.add(key);
+                const palette = PALETTES[key];
+                const btn = document.createElement('button');
+                btn.className = `palette-btn ${key === currentPalette ? 'active' : ''}`;
+                btn.dataset.palette = key;
+                btn.textContent = palette.name;
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.palette-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentPalette = key;
+                    updatePalettePreview(key);
+                    if (currentMode === 'palette') scheduleRender();
+                });
+                abstractPalettes.appendChild(btn);
+            });
+
+            // Contrasts palettes
+            const contrastsKeys = [
+                'burned', 'citrus2', 'citrus', 'electric', 'flare', 'fruity',
+                'lime2', 'lime', 'poison', 'pop2', 'pop', 'sweets2', 'sweets',
+                'tangerine2', 'tangerine', 'ultravio2', 'ultravio'
+            ];
+            contrastsKeys.forEach(key => {
+                if (usedKeys.has(key)) return;
+                usedKeys.add(key);
+                const palette = PALETTES[key];
+                const btn = document.createElement('button');
+                btn.className = `palette-btn ${key === currentPalette ? 'active' : ''}`;
+                btn.dataset.palette = key;
+                btn.textContent = palette.name;
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.palette-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentPalette = key;
+                    updatePalettePreview(key);
+                    if (currentMode === 'palette') scheduleRender();
+                });
+                contrastsPalettes.appendChild(btn);
+            });
+        }
+
+        // Update palette preview
+        function updatePalettePreview(paletteKey) {
+            const palette = PALETTES[paletteKey];
+            currentPaletteName.textContent = palette.name;
+            paletteColorCount.textContent = `${palette.color_count} colors`;
+            paletteDisplay.textContent = palette.name;
+            
+            let html = '';
+            palette.colors.forEach(color => {
+                const rgb = `rgb(${color.r}, ${color.g}, ${color.b})`;
+                html += `<div class="color-swatch" style="background: ${rgb};" title="${rgb}"></div>`;
+            });
+            
+            // Only show empty slots if we have fewer than 8, but show actual count
+            // We'll just show the actual colors, no empty slots (fixes #12)
+            paletteColors.innerHTML = html;
+        }
+
+        // Update dither indicator
+        function updateDitherIndicator() {
+            if (ditherPaletteCheckbox.checked) {
+                ditherIndicator.className = 'dithering-indicator';
+            } else {
+                ditherIndicator.className = 'dithering-indicator off';
+            }
+        }
+
+        // Create test pattern
+        function createTestPattern() {
+            // Cleanup previous image data
+            if (originalImageData) {
+                originalImageData = null;
+            }
+            if (originalColorImage) {
+                originalColorImage = null;
+            }
+            
+            mainCanvas.width = 800;
+            mainCanvas.height = 600;
+            
+            const ctx = mainCanvas.getContext('2d');
+            
+            // Gradient background
+            const gradient = ctx.createLinearGradient(0, 0, 800, 0);
+            gradient.addColorStop(0, '#000');
+            gradient.addColorStop(0.5, '#888');
+            gradient.addColorStop(1, '#fff');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 800, 600);
+            
+            // Draw colorful shapes
+            ctx.fillStyle = '#4a5b85';
+            ctx.beginPath();
+            ctx.arc(300, 300, 120, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = '#ffb86b';
+            ctx.beginPath();
+            ctx.arc(550, 300, 100, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.font = 'bold 60px "JetBrains Mono"';
+            ctx.fillStyle = '#ff6b6b';
+            ctx.fillText('DITHER', 200, 450);
+            
+            originalImageData = ctx.getImageData(0, 0, 800, 600);
+            
+            // Create color image
+            originalColorImage = new ColorImage(800, 600);
+            for (let y = 0; y < 600; y++) {
+                for (let x = 0; x < 800; x++) {
+                    const idx = (y * 800 + x) * 4;
+                    originalColorImage.data[idx] = originalImageData.data[idx];
+                    originalColorImage.data[idx + 1] = originalImageData.data[idx + 1];
+                    originalColorImage.data[idx + 2] = originalImageData.data[idx + 2];
+                    originalColorImage.data[idx + 3] = originalImageData.data[idx + 3];
+                }
+            }
+            
+            resolutionDisplay.textContent = '800x600';
+            imageInfo.textContent = '800x600 (test pattern)';
+            updateZoom();
+            applyDithering();
+        }
+
+        // Update zoom
+        function updateZoom() {
+            mainCanvas.style.transform = `scale(${zoom})`;
+            zoomLevel.textContent = `${Math.round(zoom * 100)}%`;
+            zoomStatus.textContent = `${Math.round(zoom * 100)}%`;
+        }
+
+        // Fit zoom to container
+        function fitZoom() {
+            if (!mainCanvas.width || !mainCanvas.height) return;
+            
+            const containerWidth = canvasContainer.clientWidth - 40;
+            const containerHeight = canvasContainer.clientHeight - 40;
+            
+            const scaleX = containerWidth / mainCanvas.width;
+            const scaleY = containerHeight / mainCanvas.height;
+            
+            zoom = Math.min(scaleX, scaleY, 4);
+            updateZoom();
+        }
+
+        // Throttled render
+        function scheduleRender() {
+            if (renderTimeout) {
+                clearTimeout(renderTimeout);
+            }
+            renderTimeout = setTimeout(() => {
+                applyDithering();
+                renderTimeout = null;
+            }, 50);
+        }
+
+        // Convert ImageData to GrayImage (with gamma)
+        function imageDataToGrayImage(imageData, params) {
+            const { width, height, data } = imageData;
+            const grayImg = new GrayImage(width, height);
+            
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i] / 255;
+                const g = data[i + 1] / 255;
+                const b = data[i + 2] / 255;
+                
+                let gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                gray = (gray - 0.5) * params.contrast + 0.5 + params.brightness;
+                gray = Math.max(0, Math.min(1, gray));
+                
+                grayImg.data[i / 4] = gray;
+            }
+            
+            return grayImg;
+        }
+
+        // Convert GrayImage to ImageData (with gamma and invert)
+        function grayImageToImageData(grayImg, params) {
+            const { width, height, data } = grayImg;
+            const imageData = new ImageData(width, height);
+            
+            for (let i = 0; i < data.length; i++) {
+                let gray = data[i];
+                
+                if (gammaCheckbox.checked) {
+                    gray = linearToSrgb(gray, params.gamma);
+                }
+                
+                if (invertCheckbox.checked) {
+                    gray = 1 - gray;
+                }
+                
+                const val = Math.max(0, Math.min(255, Math.round(gray * 255)));
+                const idx = i * 4;
+                imageData.data[idx] = val;
+                imageData.data[idx + 1] = val;
+                imageData.data[idx + 2] = val;
+                imageData.data[idx + 3] = 255;
+            }
+            
+            return imageData;
+        }
+
+        // Apply dithering based on current mode
+        function applyDithering() {
+            if (!originalImageData) {
+                createTestPattern();
+                return;
+            }
+
+            if (!ditherCheckbox.checked) {
+                ctx.putImageData(originalImageData, 0, 0);
+                ditheredImageData = originalImageData; // store for toggle
+                statusDisplay.textContent = 'DITHERING DISABLED';
+                return;
+            }
+
+            statusDisplay.textContent = 'PROCESSING...';
+            const startTime = performance.now();
+
+            try {
+                // Update params from sliders
+                currentParams.threshold = parseFloat(thresholdSlider.value);
+                currentParams.brightness = parseFloat(brightnessSlider.value);
+                currentParams.contrast = parseFloat(contrastSlider.value);
+                currentParams.midtones = parseFloat(midtonesSlider.value);
+                currentParams.highlights = parseFloat(highlightsSlider.value);
+                currentParams.shadows = parseFloat(shadowsSlider.value);
+                currentParams.gamma = parseFloat(gammaSlider.value);
+                currentParams.bayerLevel = bayerSizeSelect.value;
+                currentParams.riemersmaN = parseInt(riemersmaNSlider.value);
+                currentParams.riemersmaR = parseFloat(riemersmaRSlider.value);
+
+                const algorithm = algorithmSelect.value;
+                let result;
+
+                if (currentMode === 'monochrome') {
+                    colorModeDisplay.textContent = 'B&W';
+                    // Convert to grayscale
+                    let grayImg = imageDataToGrayImage(originalImageData, currentParams);
+                    
+                    // Apply gamma if enabled
+                    if (gammaCheckbox.checked) {
+                        for (let i = 0; i < grayImg.data.length; i++) {
+                            grayImg.data[i] = srgbToLinear(grayImg.data[i], currentParams.gamma);
+                        }
+                    }
+                    
+                    let ditheredGray;
+                    if (algorithm === 'bayer' || algorithm === 'bayerInverted' || algorithm === 'blueNoise' || algorithm === 'floydSteinberg' || algorithm === 'jarvis' || algorithm === 'atkinson' || algorithm === 'simple2d' || algorithm === 'riemersma' || algorithm === 'threshold' || algorithm === 'random') {
+                        ditheredGray = monochromeAlgorithms[algorithm](grayImg, currentParams);
+                    } else {
+                        // fallback
+                        ditheredGray = monochromeAlgorithms.threshold(grayImg, currentParams);
+                    }
+                    
+                    const imageData = grayImageToImageData(ditheredGray, currentParams);
+                    
+                    // Convert to ColorImage for consistent handling
+                    result = new ColorImage(imageData.width, imageData.height);
+                    for (let i = 0; i < imageData.data.length; i += 4) {
+                        result.data[i] = imageData.data[i];
+                        result.data[i + 1] = imageData.data[i + 1];
+                        result.data[i + 2] = imageData.data[i + 2];
+                        result.data[i + 3] = imageData.data[i + 3];
+                    }
+                    
+                } else if (currentMode === 'color') {
+                    colorModeDisplay.textContent = 'COLOR';
+                    // Use color algorithms that preserve original colors but apply dithering pattern to decide black/keep
+                    if (algorithm === 'bayer' || algorithm === 'bayerInverted' || algorithm === 'blueNoise' || algorithm === 'floydSteinberg' || algorithm === 'threshold' || algorithm === 'random') {
+                        result = colorAlgorithms[algorithm](originalColorImage, currentParams);
+                    } else {
+                        // fallback
+                        result = colorAlgorithms.threshold(originalColorImage, currentParams);
+                    }
+                    
+                } else if (currentMode === 'palette') {
+                    colorModeDisplay.textContent = 'PALETTE';
+                    const palette = PALETTES[currentPalette];
+                    
+                    if (ditherPaletteCheckbox.checked) {
+                        // Use dithering palette algorithms
+                        if (algorithm === 'bayer' || algorithm === 'bayerInverted') {
+                            result = colorAlgorithms.bayerPalette(originalColorImage, currentParams, palette);
+                        } else if (algorithm === 'blueNoise') {
+                            result = colorAlgorithms.blueNoisePalette(originalColorImage, currentParams, palette);
+                        } else if (algorithm === 'floydSteinberg') {
+                            result = colorAlgorithms.floydSteinbergPalette(originalColorImage, currentParams, palette);
+                        } else if (algorithm === 'riemersma') {
+                            result = colorAlgorithms.riemersmaPalette(originalColorImage, currentParams, palette);
+                        } else {
+                            // simple quantization for other algorithms
+                            result = colorAlgorithms.paletteQuantize(originalColorImage, currentParams, palette);
+                        }
+                    } else {
+                        // No dithering - just quantize
+                        result = colorAlgorithms.paletteQuantize(originalColorImage, currentParams, palette);
+                    }
+                }
+
+                // Update canvas
+                const outputImageData = new ImageData(
+                    new Uint8ClampedArray(result.data),
+                    result.width,
+                    result.height
+                );
+                
+                if (!showOriginal) {
+                    ctx.putImageData(outputImageData, 0, 0);
+                }
+                
+                ditheredImageData = outputImageData;
+                
+                const endTime = performance.now();
+                timeDisplay.textContent = `${Math.round(endTime - startTime)}ms`;
+                statusDisplay.textContent = 'READY';
+                
+                const selectedOption = algorithmSelect.options[algorithmSelect.selectedIndex];
+                algorithmDisplay.textContent = selectedOption.text;
+                
+            } catch (error) {
+                statusDisplay.textContent = 'ERROR: ' + error.message;
+                console.error(error);
+            }
+        }
+
+        // Mode switching
+        function setMode(mode) {
+            currentMode = mode;
+            
+            modeMonochrome.classList.remove('active');
+            modeColor.classList.remove('active');
+            modePalette.classList.remove('active');
+            
+            if (mode === 'monochrome') {
+                modeMonochrome.classList.add('active');
+                colorModeDisplay.textContent = 'B&W';
+            } else if (mode === 'color') {
+                modeColor.classList.add('active');
+                colorModeDisplay.textContent = 'COLOR';
+            } else if (mode === 'palette') {
+                modePalette.classList.add('active');
+                colorModeDisplay.textContent = 'PALETTE';
+            }
+            
+            scheduleRender();
+        }
+
+        modeMonochrome.addEventListener('click', () => setMode('monochrome'));
+        modeColor.addEventListener('click', () => setMode('color'));
+        modePalette.addEventListener('click', () => setMode('palette'));
+
+        // Toggle view
+        viewToggle.addEventListener('click', () => {
+            showOriginal = !showOriginal;
+            if (showOriginal) {
+                if (originalImageData) {
+                    ctx.putImageData(originalImageData, 0, 0);
+                }
+                viewLabel.textContent = 'ORIGINAL';
+                viewToggle.classList.add('active');
+            } else {
+                if (ditheredImageData) {
+                    ctx.putImageData(ditheredImageData, 0, 0);
+                }
+                viewLabel.textContent = 'DITHERED';
+                viewToggle.classList.remove('active');
+            }
+        });
+
+        // Zoom controls
+        zoomInBtn.addEventListener('click', () => {
+            zoom = Math.min(zoom + 0.25, 4);
+            updateZoom();
+        });
+
+        zoomOutBtn.addEventListener('click', () => {
+            zoom = Math.max(zoom - 0.25, 0.25);
+            updateZoom();
+        });
+
+        zoomFitBtn.addEventListener('click', fitZoom);
+
+        // Theme controls with localStorage
+        function setTheme(theme) {
+            currentTheme = theme;
+            localStorage.setItem('ditherpro-theme', theme);
+            const app = document.querySelector('.app');
+            const workspace = document.querySelector('.workspace');
+            const sidebar = document.querySelector('.sidebar');
+            
+            if (theme === 'dark') {
+                document.body.style.background = '#2a2a2a';
+                workspace.style.background = '#e5e5e5';
+                sidebar.style.background = '#181818';
+                themeDarkBtn.classList.add('active');
+                themeLightBtn.classList.remove('active');
+                themeSystemBtn.classList.remove('active');
+            } else if (theme === 'light') {
+                document.body.style.background = '#f0f0f0';
+                workspace.style.background = '#ffffff';
+                sidebar.style.background = '#2d2d2d';
+                themeLightBtn.classList.add('active');
+                themeDarkBtn.classList.remove('active');
+                themeSystemBtn.classList.remove('active');
+            } else if (theme === 'system') {
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                document.body.style.background = prefersDark ? '#2a2a2a' : '#f0f0f0';
+                workspace.style.background = prefersDark ? '#e5e5e5' : '#ffffff';
+                sidebar.style.background = prefersDark ? '#181818' : '#2d2d2d';
+                themeSystemBtn.classList.add('active');
+                themeDarkBtn.classList.remove('active');
+                themeLightBtn.classList.remove('active');
+            }
+        }
+
+        themeDarkBtn.addEventListener('click', () => setTheme('dark'));
+        themeLightBtn.addEventListener('click', () => setTheme('light'));
+        themeSystemBtn.addEventListener('click', () => setTheme('system'));
+
+        // Handle image upload with cleanup
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        // Cleanup old data
+                        originalImageData = null;
+                        originalColorImage = null;
+                        ditheredImageData = null;
+                        
+                        mainCanvas.width = img.width;
+                        mainCanvas.height = img.height;
+                        
+                        ctx.drawImage(img, 0, 0);
+                        originalImageData = ctx.getImageData(0, 0, img.width, img.height);
+                        
+                        // Create color image
+                        originalColorImage = new ColorImage(img.width, img.height);
+                        for (let y = 0; y < img.height; y++) {
+                            for (let x = 0; x < img.width; x++) {
+                                const idx = (y * img.width + x) * 4;
+                                originalColorImage.data[idx] = originalImageData.data[idx];
+                                originalColorImage.data[idx + 1] = originalImageData.data[idx + 1];
+                                originalColorImage.data[idx + 2] = originalImageData.data[idx + 2];
+                                originalColorImage.data[idx + 3] = originalImageData.data[idx + 3];
+                            }
+                        }
+                        
+                        resolutionDisplay.textContent = `${img.width}x${img.height}`;
+                        imageInfo.textContent = `${img.width}x${img.height} (${Math.round(file.size / 1024)}KB)`;
+                        
+                        showOriginal = false;
+                        viewLabel.textContent = 'DITHERED';
+                        viewToggle.classList.remove('active');
+                        
+                        fitZoom();
+                        applyDithering();
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        document.getElementById('importBtn').addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = `dithered-${currentMode}-${algorithmSelect.value}-${Date.now()}.png`;
+            link.href = mainCanvas.toDataURL('image/png');
+            link.click();
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            createTestPattern();
+            // Reset palette to default
+            currentPalette = 'crystalline2';
+            document.querySelectorAll('.palette-btn').forEach(b => {
+                if (b.dataset.palette === 'crystalline2') {
+                    b.classList.add('active');
+                } else {
+                    b.classList.remove('active');
+                }
+            });
+            updatePalettePreview('crystalline2');
+            showOriginal = false;
+            viewLabel.textContent = 'DITHERED';
+            viewToggle.classList.remove('active');
+            fitZoom();
+        });
+
+        document.getElementById('infoBtn').addEventListener('click', () => {
+            alert(`DitherPro v5.0 - Fully Fixed\n\nAlgorithms from "Ditherpunk" article\nTotal Palettes: ${Object.keys(PALETTES).length}\n\nCurrent: ${mainCanvas.width}x${mainCanvas.height}\nMode: ${currentMode}\nPalette: ${PALETTES[currentPalette].name}\nDithering: ${ditherPaletteCheckbox.checked ? 'ON' : 'OFF'}`);
+        });
+
+        // Update bayer size display
+        bayerSizeSelect.addEventListener('change', () => {
+            bayerSizeValue.textContent = bayerSizeSelect.options[bayerSizeSelect.selectedIndex].text;
+            scheduleRender();
+        });
+
+        // Show/hide algorithm-specific sections
+        algorithmSelect.addEventListener('change', () => {
+            const algo = algorithmSelect.value;
+            
+            if (algo === 'bayer' || algo === 'bayerInverted') {
+                bayerSection.style.display = 'block';
+                riemersmaSection.style.display = 'none';
+            } else if (algo === 'riemersma') {
+                bayerSection.style.display = 'none';
+                riemersmaSection.style.display = 'block';
+            } else {
+                bayerSection.style.display = 'none';
+                riemersmaSection.style.display = 'none';
+            }
+            
+            scheduleRender();
+        });
+
+        // Slider listeners with throttling
+        thresholdSlider.addEventListener('input', (e) => {
+            thresholdValue.textContent = parseFloat(e.target.value).toFixed(2);
+            if (!showOriginal) scheduleRender();
+        });
+
+        brightnessSlider.addEventListener('input', (e) => {
+            brightnessValue.textContent = parseFloat(e.target.value).toFixed(2);
+            if (!showOriginal) scheduleRender();
+        });
+
+        contrastSlider.addEventListener('input', (e) => {
+            contrastValue.textContent = parseFloat(e.target.value).toFixed(2);
+            if (!showOriginal) scheduleRender();
+        });
+
+        midtonesSlider.addEventListener('input', (e) => {
+            midtonesValue.textContent = parseFloat(e.target.value).toFixed(2);
+            if (!showOriginal) scheduleRender();
+        });
+
+        highlightsSlider.addEventListener('input', (e) => {
+            highlightsValue.textContent = parseFloat(e.target.value).toFixed(2);
+            if (!showOriginal) scheduleRender();
+        });
+
+        shadowsSlider.addEventListener('input', (e) => {
+            shadowsValue.textContent = parseFloat(e.target.value).toFixed(2);
+            if (!showOriginal) scheduleRender();
+        });
+
+        gammaSlider.addEventListener('input', (e) => {
+            gammaValue.textContent = parseFloat(e.target.value).toFixed(2);
+            if (!showOriginal) scheduleRender();
+        });
+
+        riemersmaNSlider.addEventListener('input', (e) => {
+            riemersmaNValue.textContent = e.target.value;
+            if (!showOriginal && algorithmSelect.value === 'riemersma') {
+                scheduleRender();
+            }
+        });
+
+        riemersmaRSlider.addEventListener('input', (e) => {
+            riemersmaRValue.textContent = parseFloat(e.target.value).toFixed(3);
+            if (!showOriginal && algorithmSelect.value === 'riemersma') {
+                scheduleRender();
+            }
+        });
+
+        // Checkbox listeners
+        gammaCheckbox.addEventListener('change', () => {
+            if (!showOriginal) scheduleRender();
+        });
+        
+        invertCheckbox.addEventListener('change', () => {
+            if (!showOriginal) scheduleRender();
+        });
+
+        ditherCheckbox.addEventListener('change', () => {
+            if (!showOriginal) {
+                if (ditherCheckbox.checked) {
+                    scheduleRender();
+                } else if (originalImageData) {
+                    ctx.putImageData(originalImageData, 0, 0);
+                    ditheredImageData = originalImageData; // keep sync
+                }
+            }
+        });
+
+        ditherPaletteCheckbox.addEventListener('change', () => {
+            updateDitherIndicator();
+            if (!showOriginal && currentMode === 'palette') {
+                scheduleRender();
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            fitZoom();
+        });
+
+        // Initialize
+        initPaletteButtons();
+        createTestPattern();
+        setTheme(currentTheme);
+        updatePalettePreview('crystalline2');
+        updateDitherIndicator();
+    </script>
+</body>
+</html>

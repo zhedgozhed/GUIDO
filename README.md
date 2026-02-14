@@ -1,8 +1,8 @@
-# DitherPro - Advanced Image Dithering Tool
+# GuidoDither - Advanced Image Dithering Tool
 
 A professional-grade web application for applying various dithering algorithms to images, with support for custom color palettes and multiple processing modes.
 
-https://zhedgozhed.github.io/GUIDO/
+Try It Out Here -> https://zhedgozhed.github.io/GUIDO/
 ## Features
 
 ### Core Dithering Algorithms
